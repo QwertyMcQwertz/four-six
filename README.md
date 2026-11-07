@@ -8,7 +8,8 @@ A pour-over timer for Tetsu Kasuya's 4:6 method. It runs in any phone browser, w
 
 ## What it does
 
-- Type the coffee or the water and the other fills in at 1:15.
+- Type the coffee or the water and the other fills in at your ratio.
+- Set the ratio from 1:10 to 1:22 in steps of 0.1. Tap − or +, hold to move faster, or tap the number and type it. Changing the ratio keeps whichever amount you typed last and recalculates the other.
 - Pick a taste (five steps from sweet to acidic) and a number of pours (3 to 7). The table shows when to pour, how much to add, and what the scale should read.
 - **Brew** shows the whole brew before it starts. **Start** gives a 3 second count-in, then:
   - The big card is the number your scale should read right now.
@@ -31,7 +32,7 @@ It installs as an app and opens full screen.
 
 Tetsu Kasuya brewed this way to win the 2016 World Brewers Cup. This app follows his published rules:
 
-- Water is 15 times the coffee by weight.
+- Water is 15 times the coffee by weight. That's the app's default; change the ratio for a stronger or lighter cup and the rest of the method scales with it.
 - The first 40% of the water goes in as two pours, at 0:00 and 0:45. How you split it sets the taste: a smaller first pour is sweeter, a larger one is brighter.
 - The other 60% is split evenly over the remaining pours, which start at 1:30 and are spaced evenly before 3:30. Fewer pours give a lighter cup, more pours a stronger one.
 - Take the dripper off at 3:30.

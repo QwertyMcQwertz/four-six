@@ -1,4 +1,5 @@
-// Network first, cache as the offline fallback.
+// Network first, cache as the offline fallback. `no-cache` revalidates every file,
+// so an updated page never runs against a stale schedule.js from the HTTP cache.
 const CACHE = 'coffee46';
 const FILES = ['./', 'schedule.js', 'manifest.webmanifest', 'icon.svg', 'icon-180.png', 'icon-512.png'];
 
@@ -11,7 +12,7 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then((res) => {
         if (res.ok) {
           const copy = res.clone();

@@ -98,6 +98,21 @@
   }
   .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
   .seg.taste button { font-size: 13px; }
+  .stepper {
+    display: grid; grid-template-columns: 64px 1fr 64px; gap: 4px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px;
+  }
+  .stepper:focus-within { border-color: var(--accent); }
+  .stepper button {
+    border: 0; border-radius: 10px; min-height: 48px; background: var(--line);
+    font-size: 26px; font-weight: 600; line-height: 1;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none;
+  }
+  .stepper button:disabled { opacity: 0.35; }
+  .stepper .ratio { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 26px; font-weight: 700; }
+  .stepper .ratio span { color: var(--dim); }
+  .stepper input { width: 2.6em; border: 0; outline: 0; background: none; padding: 0; font-size: inherit; font-weight: inherit; }
+  #ratioHint button { border: 0; background: none; padding: 0; color: var(--accent); font-size: inherit; font-weight: 600; }
   .hint { color: var(--dim); font-size: 14px; margin-top: 6px; min-height: 1.35em; }
 
   table { width: 100%; border-collapse: collapse; }
@@ -160,7 +175,7 @@
 <body>
 
 <main id="setup" class="screen">
-  <h1>4:6 Timer <small>1:15</small></h1>
+  <h1>4:6 Timer <small id="ratioHead">1:15</small></h1>
 
   <div class="amounts">
     <div>
@@ -170,6 +185,15 @@
     <div>
       <div class="label"><span>Water</span></div>
       <label class="field"><input id="water" type="text" inputmode="numeric" autocomplete="off" enterkeyhint="done" aria-label="Water in grams or millilitres"><span class="unit">g / ml</span></label>
+    </div>
+  </div>
+
+  <div>
+    <div class="label"><span>Ratio</span><span id="ratioHint"></span></div>
+    <div class="stepper">
+      <button id="ratioDown" type="button" aria-label="Stronger: less water per gram of coffee">&minus;</button>
+      <label class="ratio"><span>1 :</span><input id="ratio" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" aria-label="Ratio, grams of water per gram of coffee"></label>
+      <button id="ratioUp" type="button" aria-label="Lighter: more water per gram of coffee">+</button>
     </div>
   </div>
 
@@ -225,12 +249,15 @@
   const LEAD = 3; // seconds of clicks before the first pour
 
   // ---------- settings ----------
-  const state = { coffee: 20, water: 300, taste: 2, pours: 5 };
+  // anchor: the amount the user typed last, which a ratio change leaves alone.
+  const state = { coffee: 20, water: 300, taste: 2, pours: 5, ratio: S.RATIO_DEFAULT, anchor: 'coffee' };
   try {
     const saved = JSON.parse(localStorage.getItem('coffee46') || '{}');
     if (saved.water >= 1 && saved.coffee > 0) { state.coffee = saved.coffee; state.water = saved.water; }
     if (saved.taste >= 0 && saved.taste < S.TASTES.length) state.taste = saved.taste | 0;
     if (saved.pours >= S.MIN_POURS && saved.pours <= S.MAX_POURS) state.pours = saved.pours | 0;
+    if (Number.isInteger(saved.ratio) && saved.ratio >= S.RATIO_MIN && saved.ratio <= S.RATIO_MAX) state.ratio = saved.ratio;
+    if (saved.anchor === 'water') state.anchor = 'water';
   } catch {}
   const save = () => { try { localStorage.setItem('coffee46', JSON.stringify(state)); } catch {} };
 
@@ -254,21 +281,67 @@
 
   $('coffee').oninput = () => {
     const c = num($('coffee'));
+    state.anchor = 'coffee';
     state.coffee = c > 0 ? c : 0;
-    state.water = c > 0 ? S.waterFor(c) : 0;
+    state.water = c > 0 ? S.waterFor(c, state.ratio) : 0;
     renderSetup('coffee');
   };
   $('water').oninput = () => {
     const w = Math.round(num($('water')));
+    state.anchor = 'water';
     state.water = w > 0 ? w : 0;
-    state.coffee = w > 0 ? S.coffeeFor(w) : 0;
+    state.coffee = w > 0 ? S.coffeeFor(w, state.ratio) : 0;
     renderSetup('water');
   };
-  for (const id of ['coffee', 'water']) {
+  for (const id of ['coffee', 'water', 'ratio']) {
     $(id).onfocus = (e) => e.target.select();
     $(id).onblur = () => renderSetup();
     $(id).onkeydown = (e) => { if (e.key === 'Enter') e.target.blur(); };
   }
+
+  // ---------- ratio ----------
+  function setRatio(r, typing) {
+    state.ratio = Math.min(S.RATIO_MAX, Math.max(S.RATIO_MIN, Math.round(r)));
+    if (state.anchor === 'water' && state.water > 0) state.coffee = S.coffeeFor(state.water, state.ratio);
+    else if (state.coffee > 0) state.water = S.waterFor(state.coffee, state.ratio);
+    renderSetup(typing);
+  }
+  // Accepts "16.7", "16,7" or "1:16.7"; returns tenths, or NaN.
+  const ratioTyped = () => Math.round(parseFloat($('ratio').value.replace(',', '.').replace(/^\s*1\s*:\s*/, '')) * 10);
+
+  // Applied live only once in range, so typing "1" on the way to "16" changes nothing.
+  $('ratio').oninput = () => {
+    const r = ratioTyped();
+    if (r >= S.RATIO_MIN && r <= S.RATIO_MAX) setRatio(r, 'ratio');
+  };
+  $('ratio').onblur = () => {
+    const r = ratioTyped();
+    if (Number.isFinite(r)) setRatio(r); else renderSetup();
+  };
+  $('ratioHint').onclick = (e) => { if (e.target.closest('button')) setRatio(S.RATIO_DEFAULT); };
+
+  // Tap steps 0.1; hold repeats, then speeds up.
+  function holdStep(btn, dir) {
+    let timer = 0, n = 0;
+    const stop = () => { clearTimeout(timer); timer = 0; };
+    const step = () => setRatio(state.ratio + dir);
+    const loop = () => {
+      step();
+      if (btn.disabled) return stop();
+      timer = setTimeout(loop, ++n > 10 ? 35 : 90);
+    };
+    btn.onpointerdown = (e) => {
+      if (e.button) return;
+      e.preventDefault();
+      stop(); n = 0; step();
+      timer = setTimeout(loop, 400);
+    };
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) btn.addEventListener(ev, stop);
+    btn.onclick = (e) => { if (e.detail === 0) step(); }; // keyboard Enter/Space
+    btn.oncontextmenu = (e) => e.preventDefault();
+  }
+  holdStep($('ratioDown'), -1);
+  holdStep($('ratioUp'), 1);
 
   function rowsHtml(sched) {
     return sched.steps.map((s) =>
@@ -280,6 +353,13 @@
   function renderSetup(typing) {
     if (typing !== 'coffee') $('coffee').value = state.coffee || '';
     if (typing !== 'water') $('water').value = state.water || '';
+    if (typing !== 'ratio') $('ratio').value = (state.ratio / 10).toFixed(1);
+    $('ratioDown').disabled = state.ratio <= S.RATIO_MIN;
+    $('ratioUp').disabled = state.ratio >= S.RATIO_MAX;
+    $('ratioHead').textContent = '1:' + S.fmtRatio(state.ratio);
+    const std = '1:' + S.fmtRatio(S.RATIO_DEFAULT);
+    if (state.ratio === S.RATIO_DEFAULT) $('ratioHint').textContent = `4:6 standard is ${std}`;
+    else $('ratioHint').innerHTML = `<button type="button">Reset to ${std}</button>`;
     [...$('taste').children].forEach((b, i) => b.setAttribute('aria-pressed', i === state.taste));
     [...$('pours').children].forEach((b, i) => b.setAttribute('aria-pressed', i + S.MIN_POURS === state.pours));
     $('start').disabled = !valid();
@@ -415,7 +495,7 @@
         $('nowK').textContent = 'Get ready';
         $('nowBig').innerHTML = 'Tare scale';
         $('nowBig').classList.add('words');
-        $('nowSub').textContent = `${state.coffee} g coffee, ${total} g water`;
+        $('nowSub').textContent = `${state.coffee} g coffee, ${total} g water, 1:${S.fmtRatio(state.ratio)}`;
       } else {
         $('stepLabel').textContent = `Pour ${cur.n} of ${steps.length}`;
         $('nowK').textContent = 'Now, pour to';

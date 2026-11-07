@@ -1,6 +1,9 @@
 // 4:6 method schedule. Pure functions, shared by the page and test.js.
 (function (root) {
-  const RATIO = 15;
+  // Ratio is grams of water per gram of coffee, kept in whole tenths (150 = 1:15.0) so it never drifts.
+  const RATIO_DEFAULT = 150;
+  const RATIO_MIN = 100;
+  const RATIO_MAX = 220;
   const END = 210; // dripper off at 3:30, always
 
   // First pour's share of the first 40%, in 30ths of total water.
@@ -16,12 +19,18 @@
   const MIN_POURS = 3;
   const MAX_POURS = 7;
 
-  function waterFor(coffee) {
-    return Math.round(coffee * RATIO);
+  // Coffee is read in tenths of a gram, so the product is exact integer math.
+  function waterFor(coffee, ratio = RATIO_DEFAULT) {
+    return Math.round((Math.round(coffee * 10) * ratio) / 100);
   }
 
-  function coffeeFor(water) {
-    return Math.round((water / RATIO) * 10) / 10;
+  function coffeeFor(water, ratio = RATIO_DEFAULT) {
+    return Math.round((water * 100) / ratio) / 10;
+  }
+
+  // 150 -> "15", 167 -> "16.7"
+  function fmtRatio(ratio) {
+    return ratio % 10 ? (ratio / 10).toFixed(1) : String(ratio / 10);
   }
 
   // `total` is whole grams of water. Returns { total, end, steps: [{ n, at, add, target }] }.
@@ -51,7 +60,7 @@
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
   }
 
-  const api = { RATIO, END, TASTES, MIN_POURS, MAX_POURS, waterFor, coffeeFor, buildSchedule, fmtTime };
+  const api = { RATIO_DEFAULT, RATIO_MIN, RATIO_MAX, END, TASTES, MIN_POURS, MAX_POURS, waterFor, coffeeFor, fmtRatio, buildSchedule, fmtTime };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Schedule = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

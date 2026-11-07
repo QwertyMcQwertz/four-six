@@ -29,7 +29,7 @@ for (let c10 = 50; c10 <= 1200; c10 += 1) {
   for (let t = 0; t < S.TASTES.length; t++) {
     for (let p = S.MIN_POURS; p <= S.MAX_POURS; p++) {
       const { total, steps, end } = S.buildSchedule(S.waterFor(coffee), t, p);
-      assert.strictEqual(total, Math.round(coffee * 15));
+      assert.strictEqual(total, Math.round((c10 * 15) / 10));
       assert.strictEqual(steps.length, p);
       assert.strictEqual(steps[p - 1].target, total, 'last target is total');
       assert.strictEqual(steps[1].target, Math.round(total * 0.4), 'first two pours are 40%');
@@ -51,4 +51,31 @@ assert.strictEqual(S.coffeeFor(750), 50);
 assert.strictEqual(S.coffeeFor(1000), 66.7);
 assert.strictEqual(S.buildSchedule(1000, 2, 5).steps[4].target, 1000); // typed water is kept as the total
 
-console.log('ok,', combos, 'combinations');
+// Ratios: every tenth from 1:10 to 1:22.
+assert.strictEqual(S.waterFor(20), 300);
+assert.strictEqual(S.waterFor(20, 167), 334);
+assert.strictEqual(S.waterFor(18.5, 160), 296);
+assert.strictEqual(S.coffeeFor(300, 167), 18);
+assert.strictEqual(S.fmtRatio(150), '15');
+assert.strictEqual(S.fmtRatio(167), '16.7');
+let ratios = 0;
+for (let r = S.RATIO_MIN; r <= S.RATIO_MAX; r++) {
+  for (let c10 = 50; c10 <= 1200; c10 += 7) {
+    const coffee = c10 / 10;
+    const water = S.waterFor(coffee, r);
+    assert.ok(Number.isInteger(water));
+    assert.ok(Math.abs(water - (c10 * r) / 100) <= 0.5, `water for ${coffee} g at ${r}`);
+    const back = S.coffeeFor(water, r);
+    assert.ok(Math.abs(back - coffee) <= 0.05 + 0.5 / (r / 10) + 1e-9, `coffee back for ${water} g at ${r}`);
+    for (let p = S.MIN_POURS; p <= S.MAX_POURS; p++) {
+      const { steps } = S.buildSchedule(water, 2, p);
+      assert.strictEqual(steps[p - 1].target, water);
+      assert.ok(steps.every((s) => s.add > 0));
+    }
+    ratios++;
+  }
+}
+assert.strictEqual(S.fmtRatio(S.RATIO_MIN), '10');
+assert.strictEqual(S.fmtRatio(S.RATIO_MAX), '22');
+
+console.log('ok,', combos, 'combinations,', ratios, 'ratio checks');
