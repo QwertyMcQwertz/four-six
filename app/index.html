@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>4:6 Timer</title>
+<meta name="theme-color" content="#17110d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="4:6 Timer">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+  :root {
+    --bg: #17110d;
+    --panel: #231a14;
+    --line: #3a2c22;
+    --text: #f3e9dc;
+    --dim: #a89580;
+    --accent: #e8a24a;
+    --accent-ink: #1c1208;
+    --flash: #6b4416;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6efe6;
+      --panel: #fffaf3;
+      --line: #e0d2c0;
+      --text: #2a1d13;
+      --dim: #7d6a58;
+      --accent: #b8661a;
+      --accent-ink: #fffaf3;
+      --flash: #f3cf9c;
+      color-scheme: light;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-variant-numeric: tabular-nums;
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+    transition: background-color 0.9s ease-out;
+  }
+  body.flash { background: var(--flash); transition: none; }
+  button, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  [hidden] { display: none !important; }
+
+  .screen {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: calc(14px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right))
+             calc(14px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+  }
+
+  /* ---------- setup ---------- */
+  h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: 0.01em; }
+  h1 small { font-weight: 400; color: var(--dim); font-size: 14px; margin-left: 8px; }
+  .label {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--dim); margin-bottom: 6px; display: flex; justify-content: space-between;
+  }
+  .label span + span { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+  .amounts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field {
+    display: flex; align-items: baseline; gap: 4px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 8px 12px;
+  }
+  .field:focus-within { border-color: var(--accent); }
+  .field input {
+    width: 100%; min-width: 0; border: 0; outline: 0; background: none; padding: 0;
+    font-size: 34px; font-weight: 700;
+  }
+  .field .unit { color: var(--dim); font-size: 15px; white-space: nowrap; }
+
+  .seg {
+    display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 4px; gap: 4px;
+  }
+  .seg button {
+    border: 0; background: none; border-radius: 10px; min-height: 48px; padding: 4px 2px;
+    font-size: 15px; font-weight: 600; color: var(--dim); line-height: 1.1;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .seg.taste button { font-size: 13px; }
+  .hint { color: var(--dim); font-size: 14px; margin-top: 6px; min-height: 1.35em; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--dim); text-align: right; padding: 0 0 4px;
+  }
+  th:first-child, td:first-child { text-align: left; }
+  td { text-align: right; padding: 7px 0; border-top: 1px solid var(--line); font-size: 16px; }
+  td.target { font-weight: 700; }
+  td.dim, tr.end td { color: var(--dim); }
+
+  .primary {
+    margin-top: auto; border: 0; border-radius: 16px; min-height: 60px;
+    background: var(--accent); color: var(--accent-ink); font-size: 20px; font-weight: 700;
+    position: sticky; bottom: calc(14px + env(safe-area-inset-bottom));
+    box-shadow: 0 0 0 8px var(--bg);
+  }
+  .primary:disabled { opacity: 0.4; }
+
+  /* ---------- brew ---------- */
+  #brew { gap: clamp(8px, 1.6dvh, 16px); height: 100dvh; }
+  .topbar { display: flex; justify-content: space-between; align-items: baseline; color: var(--dim); font-size: 16px; }
+  .topbar b { color: var(--text); font-size: 24px; font-weight: 700; }
+
+  .card { border-radius: 20px; padding: clamp(10px, 1.8dvh, 18px) 18px; }
+  .card .k { font-size: 13px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; }
+  .card .big { font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+  .card .big small { font-size: 0.42em; font-weight: 600; letter-spacing: 0; margin-left: 4px; }
+
+  #now { background: var(--accent); color: var(--accent-ink); }
+  #now .k { opacity: 0.75; }
+  #now .big { font-size: clamp(44px, 9dvh, 76px); margin-top: 4px; }
+  #now .big.words { font-size: clamp(34px, 6.5dvh, 52px); }
+  #now .sub { opacity: 0.75; font-size: 16px; margin-top: 2px; }
+
+  #next { background: var(--panel); border: 1px solid var(--line); }
+  #next .k { color: var(--dim); }
+  #next .row { display: flex; justify-content: space-between; align-items: flex-end; gap: 8px; margin-top: 4px; }
+  #next .big { font-size: clamp(26px, 5dvh, 40px); color: var(--dim); }
+  #next .count { font-size: clamp(44px, 9dvh, 76px); font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+  #next .cap { font-size: 13px; font-weight: 600; color: var(--dim); margin-top: 2px; display: flex; justify-content: space-between; }
+  #bar { height: 6px; border-radius: 3px; background: var(--line); margin-top: 10px; overflow: hidden; }
+  #bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+
+  #list { flex: 1 1 0; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+  #list::-webkit-scrollbar { display: none; }
+  #list td { padding: clamp(3px, 0.8dvh, 7px) 0; }
+  #list tr.past td { color: var(--dim); text-decoration: line-through; text-decoration-color: var(--line); }
+  #list tr.cur td { color: var(--accent); font-weight: 700; }
+
+  #stop {
+    border: 1px solid var(--line); background: none; border-radius: 14px; min-height: 52px;
+    font-size: 17px; font-weight: 600; color: var(--dim); flex: none;
+  }
+  #stop.armed { border-color: #d2543b; color: #d2543b; }
+  #stop.done { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+</style>
+</head>
+<body>
+
+<main id="setup" class="screen">
+  <h1>4:6 Timer <small>1:15</small></h1>
+
+  <div class="amounts">
+    <div>
+      <div class="label"><span>Coffee</span></div>
+      <label class="field"><input id="coffee" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" aria-label="Coffee in grams"><span class="unit">g</span></label>
+    </div>
+    <div>
+      <div class="label"><span>Water</span></div>
+      <label class="field"><input id="water" type="text" inputmode="numeric" autocomplete="off" enterkeyhint="done" aria-label="Water in grams or millilitres"><span class="unit">g / ml</span></label>
+    </div>
+  </div>
+
+  <div>
+    <div class="label"><span>Taste</span></div>
+    <div id="taste" class="seg taste" role="group" aria-label="Taste"></div>
+    <div id="tasteHint" class="hint"></div>
+  </div>
+
+  <div>
+    <div class="label"><span>Pours</span><span>fewer is lighter, more is stronger</span></div>
+    <div id="pours" class="seg" role="group" aria-label="Number of pours"></div>
+  </div>
+
+  <table>
+    <thead><tr><th>Pour</th><th>At</th><th>Add</th><th>Scale reads</th></tr></thead>
+    <tbody id="preview"></tbody>
+  </table>
+
+  <button id="start" class="primary">Brew</button>
+</main>
+
+<main id="brew" class="screen" hidden>
+  <div class="topbar"><span id="stepLabel"></span><b id="elapsed">0:00</b></div>
+
+  <section id="now" class="card" aria-live="polite" aria-atomic="true">
+    <div class="k" id="nowK">Now, pour to</div>
+    <div class="big" id="nowBig"></div>
+    <div class="sub" id="nowSub"></div>
+  </section>
+
+  <section id="next" class="card">
+    <div class="k" id="nextK"></div>
+    <div class="row">
+      <div class="big" id="nextBig"></div>
+      <div class="count" id="count"></div>
+    </div>
+    <div class="cap"><span id="nextSub"></span><span id="countCap"></span></div>
+    <div id="bar"><i></i></div>
+  </section>
+
+  <div id="list"><table><tbody id="rows"></tbody></table></div>
+
+  <button id="go" class="primary" hidden>Start</button>
+  <button id="stop">Stop</button>
+</main>
+
+<script src="schedule.js"></script>
+<script>
+(() => {
+  const S = Schedule;
+  const $ = (id) => document.getElementById(id);
+  const LEAD = 3; // seconds of clicks before the first pour
+
+  // ---------- settings ----------
+  const state = { coffee: 20, water: 300, taste: 2, pours: 5 };
+  try {
+    const saved = JSON.parse(localStorage.getItem('coffee46') || '{}');
+    if (saved.water >= 1 && saved.coffee > 0) { state.coffee = saved.coffee; state.water = saved.water; }
+    if (saved.taste >= 0 && saved.taste < S.TASTES.length) state.taste = saved.taste | 0;
+    if (saved.pours >= S.MIN_POURS && saved.pours <= S.MAX_POURS) state.pours = saved.pours | 0;
+  } catch {}
+  const save = () => { try { localStorage.setItem('coffee46', JSON.stringify(state)); } catch {} };
+
+  const num = (el) => parseFloat(el.value.replace(',', '.'));
+  const valid = () => state.water >= 1 && state.water <= 99999;
+
+  const TASTE_SHORT = ['Sweet', 'Sweet\nNormal', 'Normal', 'Normal\nAcidic', 'Acidic'];
+  S.TASTES.forEach((t, i) => {
+    const b = document.createElement('button');
+    b.innerText = TASTE_SHORT[i];
+    b.setAttribute('aria-label', t.label);
+    b.onclick = () => { state.taste = i; renderSetup(); };
+    $('taste').append(b);
+  });
+  for (let p = S.MIN_POURS; p <= S.MAX_POURS; p++) {
+    const b = document.createElement('button');
+    b.textContent = p;
+    b.onclick = () => { state.pours = p; renderSetup(); };
+    $('pours').append(b);
+  }
+
+  $('coffee').oninput = () => {
+    const c = num($('coffee'));
+    state.coffee = c > 0 ? c : 0;
+    state.water = c > 0 ? S.waterFor(c) : 0;
+    renderSetup('coffee');
+  };
+  $('water').oninput = () => {
+    const w = Math.round(num($('water')));
+    state.water = w > 0 ? w : 0;
+    state.coffee = w > 0 ? S.coffeeFor(w) : 0;
+    renderSetup('water');
+  };
+  for (const id of ['coffee', 'water']) {
+    $(id).onfocus = (e) => e.target.select();
+    $(id).onblur = () => renderSetup();
+    $(id).onkeydown = (e) => { if (e.key === 'Enter') e.target.blur(); };
+  }
+
+  function rowsHtml(sched) {
+    return sched.steps.map((s) =>
+      `<tr data-n="${s.n}"><td>${s.n}</td><td>${S.fmtTime(s.at)}</td><td class="dim">+${s.add} g</td><td class="target">${s.target} g</td></tr>`
+    ).join('') + `<tr class="end" data-n="end"><td colspan="2">Dripper off</td><td></td><td>${S.fmtTime(sched.end)}</td></tr>`;
+  }
+
+  // `typing` names the field being edited, so it is not rewritten under the cursor.
+  function renderSetup(typing) {
+    if (typing !== 'coffee') $('coffee').value = state.coffee || '';
+    if (typing !== 'water') $('water').value = state.water || '';
+    [...$('taste').children].forEach((b, i) => b.setAttribute('aria-pressed', i === state.taste));
+    [...$('pours').children].forEach((b, i) => b.setAttribute('aria-pressed', i + S.MIN_POURS === state.pours));
+    $('start').disabled = !valid();
+    if (!valid()) { $('preview').innerHTML = ''; $('tasteHint').textContent = ''; return; }
+    const sched = S.buildSchedule(state.water, state.taste, state.pours);
+    const [a, b] = sched.steps;
+    $('tasteHint').textContent = `${S.TASTES[state.taste].label}: first pour ${a.add} g, second ${b.add} g`;
+    $('preview').innerHTML = rowsHtml(sched);
+    save();
+  }
+
+  // ---------- sound ----------
+  let ctx = null, master = null;
+
+  function audioOn() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return Promise.resolve();
+    if (!ctx) ctx = new AC();
+    // Lets iOS play through the ring/silent switch.
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+    return ctx.state === 'running' ? Promise.resolve() : ctx.resume().catch(() => {});
+  }
+
+  function tone(t, freq, peak, decay, type) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || 'sine';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    o.connect(g).connect(master);
+    o.start(t);
+    o.stop(t + decay + 0.05);
+  }
+  const click = (t) => { tone(t, 1500, 0.5, 0.05, 'triangle'); tone(t, 320, 0.35, 0.04); };
+  const ding = (t) => { tone(t, 1318.5, 0.5, 1.6); tone(t, 2637, 0.18, 0.9); tone(t, 3955, 0.08, 0.5); };
+
+  // Queue every remaining click and ding on the audio clock, so they stay
+  // exact even when page timers are throttled. Safe to call again at any time.
+  function scheduleSounds() {
+    if (!ctx || !brew) return;
+    if (master) master.disconnect();
+    master = ctx.createGain();
+    master.connect(ctx.destination);
+    const e = elapsed(), t0 = ctx.currentTime;
+    const events = [...brew.sched.steps.map((s) => s.at), brew.sched.end];
+    events.forEach((at, i) => {
+      for (let k = 3; k >= 1; k--) if (at - k > e + 0.03) click(t0 + (at - k - e));
+      if (at > e) {
+        ding(t0 + (at - e));
+        if (i === events.length - 1) ding(t0 + (at - e) + 0.45);
+      }
+    });
+  }
+
+  // ---------- screen wake ----------
+  let lock = null;
+  async function wakeOn() {
+    try { if (navigator.wakeLock && !lock) { lock = await navigator.wakeLock.request('screen'); lock.onrelease = () => { lock = null; }; } } catch {}
+  }
+  function wakeOff() { if (lock) lock.release().catch(() => {}); lock = null; }
+
+  // ---------- brew ----------
+  let brew = null; // { sched, start, tick, lastIdx }; start is null while previewing
+  const elapsed = () => (brew.start == null ? -LEAD : (Date.now() - brew.start) / 1000);
+
+  // Shows the brew screen frozen at "Get ready" until Start is tapped.
+  function previewBrew() {
+    if (!valid()) return;
+    if (brew) clearInterval(brew.tick);
+    document.activeElement && document.activeElement.blur();
+    brew = { sched: S.buildSchedule(state.water, state.taste, state.pours), start: null, lastIdx: -2 };
+    $('rows').innerHTML = rowsHtml(brew.sched);
+    $('setup').hidden = true;
+    $('brew').hidden = false;
+    $('go').hidden = false;
+    disarm();
+    window.scrollTo(0, 0);
+    renderBrew();
+  }
+
+  function startBrew() {
+    if (!brew || brew.start != null) return;
+    brew.start = Date.now() + LEAD * 1000 + 250;
+    $('go').hidden = true;
+    disarm();
+    audioOn().then(scheduleSounds);
+    wakeOn();
+    brew.tick = setInterval(renderBrew, 100);
+    renderBrew();
+  }
+
+  function endBrew() {
+    if (!brew) return;
+    clearInterval(brew.tick);
+    brew = null;
+    if (master) { master.disconnect(); master = null; }
+    wakeOff();
+    $('brew').hidden = true;
+    $('setup').hidden = false;
+    renderSetup();
+  }
+
+  function flash() {
+    document.body.classList.add('flash');
+    requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove('flash')));
+  }
+
+  function renderBrew() {
+    if (!brew) return;
+    const { steps, end, total } = brew.sched;
+    const e = elapsed();
+    const done = e >= end;
+    let idx = -1;
+    while (idx + 1 < steps.length && steps[idx + 1].at <= e) idx++;
+    const cur = steps[idx], nxt = steps[idx + 1];
+
+    // Keeps running after the dripper comes off, so the drip time is visible.
+    $('elapsed').textContent = e < 0 ? '0:00' : S.fmtTime(e);
+    const left = (at) => S.fmtTime(Math.ceil(at - e));
+
+    if (done) {
+      $('stepLabel').textContent = 'Dripper off at ' + S.fmtTime(end);
+      $('nowK').textContent = 'Done';
+      $('nowBig').innerHTML = 'Dripper off';
+      $('nowBig').classList.add('words');
+      $('nowSub').textContent = `${total} g, dripping for ${S.fmtTime(e - end)}`;
+      $('next').hidden = true;
+    } else {
+      $('next').hidden = false;
+      if (!cur) {
+        $('stepLabel').textContent = 'Get ready';
+        $('nowK').textContent = 'Get ready';
+        $('nowBig').innerHTML = 'Tare scale';
+        $('nowBig').classList.add('words');
+        $('nowSub').textContent = `${state.coffee} g coffee, ${total} g water`;
+      } else {
+        $('stepLabel').textContent = `Pour ${cur.n} of ${steps.length}`;
+        $('nowK').textContent = 'Now, pour to';
+        $('nowBig').innerHTML = `${cur.target}<small>g</small>`;
+        $('nowBig').classList.remove('words');
+        $('nowSub').textContent = `+${cur.add} g`;
+      }
+      const from = cur ? cur.at : -LEAD;
+      const to = nxt ? nxt.at : end;
+      if (nxt) {
+        $('nextK').textContent = `Next at ${S.fmtTime(nxt.at)}, pour to`;
+        $('nextBig').innerHTML = `${nxt.target}<small>g</small>`;
+        $('nextSub').textContent = `+${nxt.add} g`;
+      } else {
+        $('nextK').textContent = `Let it drain`;
+        $('nextBig').innerHTML = `<small style="margin:0">Dripper off at ${S.fmtTime(end)}</small>`;
+        $('nextSub').textContent = '';
+      }
+      $('count').textContent = left(to);
+      $('countCap').textContent = nxt ? 'until next pour' : 'until done';
+      $('bar').firstElementChild.style.width = Math.min(100, Math.max(0, ((e - from) / (to - from)) * 100)) + '%';
+    }
+
+    const stateIdx = done ? steps.length : idx;
+    if (stateIdx !== brew.lastIdx) {
+      if (brew.lastIdx !== -2 && stateIdx >= 0) {
+        flash();
+        try { if (navigator.vibrate) navigator.vibrate(done ? [200, 120, 200] : 200); } catch {}
+      }
+      brew.lastIdx = stateIdx;
+      [...$('rows').children].forEach((tr, i) => {
+        tr.className = (tr.dataset.n === 'end' ? 'end ' : '') + (i < stateIdx ? 'past' : i === stateIdx ? 'cur' : '');
+      });
+      const curRow = $('rows').children[Math.max(0, stateIdx)];
+      if (curRow && curRow.scrollIntoView) curRow.scrollIntoView({ block: 'nearest' });
+      if (done) {
+        disarm();
+        $('stop').className = 'done';
+        $('stop').textContent = 'Done';
+      }
+    }
+
+    // Let the screen sleep again a few minutes after the end. The clock keeps counting.
+    if (e > end + 300) wakeOff();
+  }
+
+  // Mid-brew, Stop asks for a second tap so a stray touch does nothing.
+  let armTimer = 0;
+  function disarm() {
+    clearTimeout(armTimer);
+    $('stop').className = '';
+    $('stop').textContent = brew && brew.start == null ? 'Back' : 'Stop';
+  }
+  $('stop').onclick = () => {
+    const b = $('stop');
+    if (brew.start == null || b.classList.contains('done') || b.classList.contains('armed')) { disarm(); endBrew(); return; }
+    b.className = 'armed';
+    b.textContent = 'Tap again to stop';
+    armTimer = setTimeout(disarm, 4000);
+  };
+
+  $('start').onclick = previewBrew;
+  $('go').onclick = startBrew;
+
+  // Coming back from the lock screen or another app: the audio clock may have
+  // paused, so requeue the sounds against the wall clock and retake the wake lock.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !brew || brew.start == null) return;
+    audioOn().then(scheduleSounds);
+    if (elapsed() <= brew.sched.end + 300) wakeOn();
+    renderBrew();
+  });
+
+  renderSetup();
+
+  if ('serviceWorker' in navigator && location.protocol === 'https:') {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
