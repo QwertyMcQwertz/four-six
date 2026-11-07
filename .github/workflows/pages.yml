@@ -24,7 +24,8 @@ jobs:
           path: app
 
   deploy:
-    if: github.event_name != 'pull_request'
+    # Pages needs a public repo on the free plan; publishing starts once it goes public.
+    if: github.event_name != 'pull_request' && !github.event.repository.private
     needs: test
     runs-on: ubuntu-latest
     permissions:
